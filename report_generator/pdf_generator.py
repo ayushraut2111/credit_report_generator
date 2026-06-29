@@ -5,8 +5,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from schemas import SampleInputModel
 
 PAGE_SIZE = landscape(A4)
@@ -20,6 +19,39 @@ L_BLUE  = HexColor('#4A9FD4')
 OFF_WHT = HexColor('#D6E4F0')
 MUTED   = HexColor('#888888')
 WM_CLR  = Color(0.55, 0.55, 0.55, alpha=0.07)
+
+BODY_W = 297 * mm - 2 * MARGIN
+ALT_BG = HexColor('#F2F7FB')
+BORDER = HexColor('#B0C4DE')
+YELLOW = HexColor('#FAD87A')
+SUBTOTAL_BG = HexColor('#FFF5CC')
+GREEN = HexColor('#2E7D32')
+RED = HexColor('#C62828')
+
+_S = dict(
+    section=ParagraphStyle('section',  fontName='Helvetica-Bold',
+                           fontSize=11, textColor=NAVY, spaceBefore=6*mm, spaceAfter=2*mm),
+    banner=ParagraphStyle('banner',   fontName='Helvetica-Bold',
+                          fontSize=10, textColor=HexColor('#FFFFFF'), alignment=TA_CENTER),
+    cell=ParagraphStyle('cell',     fontName='Helvetica',
+                        fontSize=8,  leading=11),
+    cell_sm=ParagraphStyle('cell_sm',  fontName='Helvetica',
+                           fontSize=7,  leading=10, textColor=MUTED),
+    cell_c=ParagraphStyle('cell_c',   fontName='Helvetica',
+                          fontSize=8,  leading=11, alignment=TA_CENTER),
+    cell_cb=ParagraphStyle('cell_cb',  fontName='Helvetica-Bold',
+                           fontSize=8,  leading=11, alignment=TA_CENTER),
+    cell_hdr=ParagraphStyle('cell_hdr',  fontName='Helvetica-Bold',
+                            fontSize=8,  leading=11, textColor=NAVY, alignment=TA_LEFT),
+    cell_b=ParagraphStyle(
+        'cell_b',    fontName='Helvetica-Bold', fontSize=8,  leading=11),
+    cell_num=ParagraphStyle('cell_num',  fontName='Helvetica',
+                            fontSize=8,  leading=11, alignment=TA_RIGHT),
+    cell_num_b=ParagraphStyle(
+        'cell_num_b', fontName='Helvetica-Bold', fontSize=8,  leading=11, alignment=TA_RIGHT),
+    right=ParagraphStyle('right',     fontName='Helvetica',
+                         fontSize=7.5, leading=10, alignment=TA_RIGHT, textColor=MUTED),
+)
 
 
 class _PageCanvas(canvas.Canvas):
@@ -48,12 +80,12 @@ class _PageCanvas(canvas.Canvas):
 
     # add chrome pieces in every page
 
-    def _draw_chrome(self, page_num: int, total: int) -> None:
+    def _draw_chrome(self, page_num: int, total: int):
         self._draw_watermark()
         self._draw_header()
         self._draw_footer(page_num, total)
 
-    def _draw_header(self) -> None:
+    def _draw_header(self):
         band_y = PAGE_H - HDR_H
 
         # Navy band
@@ -82,12 +114,12 @@ class _PageCanvas(canvas.Canvas):
         ts = self._generated_at.strftime('%d %b %Y, %H:%M') if self._generated_at else ''
         self.drawRightString(PAGE_W - MARGIN, text_y, ts)
 
-    def _draw_footer(self, page_num: int, total: int) -> None:
+    def _draw_footer(self, page_num: int, total: int):
         self.setFont('Helvetica', 7)
         self.setFillColor(MUTED)
         self.drawRightString(PAGE_W - MARGIN, 6, f'Page {page_num} of {total}')
 
-    def _draw_watermark(self) -> None:
+    def _draw_watermark(self):
         self.saveState()
         self.setFillColor(WM_CLR)
         self.translate(PAGE_W / 2, PAGE_H / 2)
@@ -97,77 +129,149 @@ class _PageCanvas(canvas.Canvas):
         self.restoreState()
 
 
-BODY_W   = 297 * mm - 2 * MARGIN
-ALT_BG   = HexColor('#F2F7FB')
-BORDER   = HexColor('#B0C4DE')
-YELLOW   = HexColor('#FAD87A')
 
-_S = dict(
-    section  = ParagraphStyle('section',  fontName='Helvetica-Bold', fontSize=11, textColor=NAVY, spaceBefore=6*mm, spaceAfter=2*mm),
-    banner   = ParagraphStyle('banner',   fontName='Helvetica-Bold', fontSize=10, textColor=HexColor('#FFFFFF'), alignment=TA_CENTER),
-    cell     = ParagraphStyle('cell',     fontName='Helvetica',      fontSize=8,  leading=11),
-    cell_sm  = ParagraphStyle('cell_sm',  fontName='Helvetica',      fontSize=7,  leading=10, textColor=MUTED),
-    cell_c   = ParagraphStyle('cell_c',   fontName='Helvetica',      fontSize=8,  leading=11, alignment=TA_CENTER),
-    cell_cb  = ParagraphStyle('cell_cb',  fontName='Helvetica-Bold', fontSize=8,  leading=11, alignment=TA_CENTER),
-    cell_hdr = ParagraphStyle('cell_hdr', fontName='Helvetica-Bold', fontSize=8,  leading=11, textColor=NAVY, alignment=TA_LEFT),
-)
+class CreditPdfMaker:
 
+    def __init__(self, data: SampleInputModel):
+        self.data = data
 
-def _build_auditors(auditors: list) -> list:
-    recent = auditors[0]
+    @staticmethod
+    def _make_banner(title: str):
+        t = Table([[Paragraph(title, _S['banner'])]], colWidths=[BODY_W])
+        t.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, -1), NAVY),
+            ('TOPPADDING',    (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ]))
+        return t
 
-    banner = _make_banner('AUDITORS - STANDALONE')
+    @staticmethod
+    def _fmt_value(val, growth):
+        if val is None:
+            return ''
+        txt = f'{val:.2f}'
+        if growth is None:
+            return txt
+        if growth >= 0:
+            return f'{txt} <font color="#2E7D32">↑{growth:.1f}%</font>'
+        return f'{txt} <font color="#C62828">↓{abs(growth):.1f}%</font>'
 
-    col_w = [50*mm, 55*mm, 55*mm, 107*mm]
-    hdr = [Paragraph(t, _S['cell_hdr']) for t in
-           ['Fiscal Year', 'Auditor Name', 'Auditor Firm Name', 'Address']]
+    def _build_auditors(self):
+        recent = self.data.sections.auditors[0]
 
-    # auditor name
-    name_cell = [
-        Paragraph(recent.auditor_name, _S['cell']),
-        Paragraph(f'Membership No. {recent.membership_no}', _S['cell_sm']),
-        Paragraph(f'PAN: {recent.pan}', _S['cell_sm']),
-    ]
-    row = [
-        Paragraph(recent.fiscal_year, _S['cell_c']),
-        name_cell,
-        Paragraph(recent.firm_name,   _S['cell']),
-        Paragraph(recent.address,     _S['cell']),
-    ]
+        col_w = [50*mm, 55*mm, 55*mm, 107*mm]
+        hdr = [Paragraph(t, _S['cell_hdr']) for t in
+               ['Fiscal Year', 'Auditor Name', 'Auditor Firm Name', 'Address']]
 
-    cmds = [
-        ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
-        ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
-        ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
-        ('TOPPADDING',    (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
-        ('VALIGN',        (0, 1), (-1, -1), 'TOP'),
-    ]
+        name_cell = [
+            Paragraph(recent.auditor_name, _S['cell']),
+            Paragraph(f'Membership No. {recent.membership_no}', _S['cell_sm']),
+            Paragraph(f'PAN: {recent.pan}', _S['cell_sm']),
+        ]
+        row = [
+            Paragraph(recent.fiscal_year, _S['cell_c']),
+            name_cell,
+            Paragraph(recent.firm_name,   _S['cell']),
+            Paragraph(recent.address,     _S['cell']),
+        ]
 
-    tbl = Table([hdr, row], colWidths=col_w)
-    tbl.setStyle(TableStyle(cmds))
+        cmds = [
+            ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
+            ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+            ('TOPPADDING',    (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+            ('VALIGN',        (0, 1), (-1, -1), 'TOP'),
+        ]
 
-    return [Spacer(1, 4*mm), banner, Spacer(1, 3*mm), tbl]
+        tbl = Table([hdr, row], colWidths=col_w)
+        tbl.setStyle(TableStyle(cmds))
+        return [Spacer(1, 4*mm), self._make_banner('AUDITORS - STANDALONE'), Spacer(1, 3*mm), tbl]
 
+    def _build_profit_loss_section(self):
+        pl = self.data.sections.profit_and_loss
+        currency_unit = self.data.report_meta.currency_unit
+        periods = pl.periods
+        n = len(periods)
+        part_w = 75 * mm
+        val_w  = (BODY_W - part_w) / n
+        col_w  = [part_w] + [val_w] * n
 
-def _make_banner(title: str) -> Table:
-    t = Table([[Paragraph(title, _S['banner'])]], colWidths=[BODY_W])
-    t.setStyle(TableStyle([
-        ('BACKGROUND',    (0, 0), (-1, -1), NAVY),
-        ('TOPPADDING',    (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
-    ]))
-    return t
+        hdr = [Paragraph('Particulars', _S['cell_hdr'])]
+        for p in periods:
+            hdr.append(Paragraph(p, _S['cell_hdr']))
 
+        table_rows = [hdr]
+        cmds = [
+            ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
+            ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+            ('TOPPADDING',    (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ]
+
+        for group in pl.groups:
+            if group.title:
+                ri = len(table_rows)
+                table_rows.append([Paragraph(group.title, _S['cell_b'])] + [''] * n)
+                cmds += [
+                    ('BACKGROUND', (0, ri), (-1, ri), SUBTOTAL_BG),
+                    ('SPAN',       (0, ri), (-1, ri)),
+                ]
+
+            for row in group.rows:
+                ri = len(table_rows)
+                p_sty = _S['cell_b']     if row.is_subtotal else _S['cell']
+                v_sty = _S['cell_num_b'] if row.is_subtotal else _S['cell_num']
+
+                cells = [Paragraph(row.particular, p_sty)]
+                for i in range(n):
+                    val = row.values[i]     if row.values     and i < len(row.values)     else None
+                    gro = row.growth_pct[i] if row.growth_pct and i < len(row.growth_pct) else None
+                    cells.append(Paragraph(self._fmt_value(val, gro), v_sty))
+
+                table_rows.append(cells)
+                if row.is_subtotal:
+                    cmds.append(('BACKGROUND', (0, ri), (-1, ri), SUBTOTAL_BG))
+
+        tbl = Table(table_rows, colWidths=col_w)
+        tbl.setStyle(TableStyle(cmds))
+
+        currency_note = Paragraph(f'(Amount in {currency_unit})', _S['right'])
+        return [
+            Spacer(1, 4*mm),
+            self._make_banner('PROFIT AND LOSS - STANDALONE'),
+            Spacer(1, 2*mm),
+            currency_note,
+            Spacer(1, 1*mm),
+            tbl,
+        ]
+
+    def build(self, output_path: Path):
+        # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=PAGE_SIZE,
+            leftMargin=MARGIN,
+            rightMargin=MARGIN,
+            topMargin=HDR_H + MARGIN,
+            bottomMargin=MARGIN,
+        )
+        story = []
+        story += self._build_auditors()
+        story += self._build_profit_loss_section()
+        doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
 def _canvas_factory(data: SampleInputModel):
-    # return a subclass pre-loaded with report metadata
     class _C(_PageCanvas):
         def __init__(self, filename, **kwargs):
             super().__init__(
@@ -181,14 +285,4 @@ def _canvas_factory(data: SampleInputModel):
 
 
 def generate_pdf(data: SampleInputModel, output_path: Path):
-    doc = SimpleDocTemplate(
-        str(output_path),
-        pagesize=PAGE_SIZE,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=HDR_H + MARGIN,
-        bottomMargin=MARGIN,
-    )
-    story = []
-    story += _build_auditors(data.sections.auditors)
-    doc.build(story, canvasmaker=_canvas_factory(data))
+    CreditPdfMaker(data).build(output_path)
