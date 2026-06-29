@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel
 
 
@@ -35,6 +35,7 @@ class RowModel(BaseModel):
     particular: str
     values: Optional[List[Optional[float]]] = None
     growth_pct: Optional[List[Optional[float]]] = None
+    growth_delta: Optional[List[Optional[float]]] = None
     is_subtotal: bool
     unit: Optional[str] = None
 
@@ -66,12 +67,39 @@ class FinancialRatiosModel(BaseModel):
     groups: List[GroupModel]
 
 
+class RelatedPartyModel(BaseModel):
+    name: Optional[str] = None
+    relation: Optional[str] = None
+    details: Optional[dict] = None
+
+
+class AnnexureModel(BaseModel):
+    profit_and_loss: Optional[ProfitAndLossModel] = None
+    balance_sheet: Optional[BalanceSheetModel] = None
+    financial_ratios: Optional[FinancialRatiosModel] = None
+    others: Optional[dict] = None
+
+
+class RelatedPartiesSectionModel(BaseModel):
+    period: Optional[str] = None
+    individuals: Optional[List[Any]] = None
+    companies: Optional[List[Any]] = None
+    others: Optional[List[Any]] = None
+
+
+class CashFlowModel(BaseModel):
+    available: Optional[bool] = None
+
+
 class SectionsModel(BaseModel):
     auditors: List[AuditorModel]
     profit_and_loss: ProfitAndLossModel
     balance_sheet: BalanceSheetModel
     auditor_comments: List[AuditorCommentModel]
     financial_ratios: FinancialRatiosModel
+    cash_flow: Optional[CashFlowModel] = None
+    related_parties: Optional[RelatedPartiesSectionModel] = None
+    annexure: Optional[AnnexureModel] = None
 
 
 class SampleInputModel(BaseModel):
