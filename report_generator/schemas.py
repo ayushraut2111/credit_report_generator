@@ -88,7 +88,9 @@ class RelatedPartiesSectionModel(BaseModel):
 
 
 class CashFlowModel(BaseModel):
-    available: Optional[bool] = None
+    available: bool = True
+    periods: Optional[List[str]] = None
+    groups: Optional[List[GroupModel]] = None
 
 
 class SectionsModel(BaseModel):
