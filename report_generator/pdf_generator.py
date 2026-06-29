@@ -1,9 +1,11 @@
 from pathlib import Path
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
-from reportlab.platypus import SimpleDocTemplate, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 from schemas import SampleInputModel
 
@@ -95,6 +97,75 @@ class _PageCanvas(canvas.Canvas):
         self.restoreState()
 
 
+BODY_W   = 297 * mm - 2 * MARGIN
+ALT_BG   = HexColor('#F2F7FB')
+BORDER   = HexColor('#B0C4DE')
+YELLOW   = HexColor('#FAD87A')
+
+_S = dict(
+    section  = ParagraphStyle('section',  fontName='Helvetica-Bold', fontSize=11, textColor=NAVY, spaceBefore=6*mm, spaceAfter=2*mm),
+    banner   = ParagraphStyle('banner',   fontName='Helvetica-Bold', fontSize=10, textColor=HexColor('#FFFFFF'), alignment=TA_CENTER),
+    cell     = ParagraphStyle('cell',     fontName='Helvetica',      fontSize=8,  leading=11),
+    cell_sm  = ParagraphStyle('cell_sm',  fontName='Helvetica',      fontSize=7,  leading=10, textColor=MUTED),
+    cell_c   = ParagraphStyle('cell_c',   fontName='Helvetica',      fontSize=8,  leading=11, alignment=TA_CENTER),
+    cell_cb  = ParagraphStyle('cell_cb',  fontName='Helvetica-Bold', fontSize=8,  leading=11, alignment=TA_CENTER),
+    cell_hdr = ParagraphStyle('cell_hdr', fontName='Helvetica-Bold', fontSize=8,  leading=11, textColor=NAVY, alignment=TA_LEFT),
+)
+
+
+def _build_auditors(auditors: list) -> list:
+    recent = auditors[0]
+
+    banner = _make_banner('AUDITORS - STANDALONE')
+
+    col_w = [50*mm, 55*mm, 55*mm, 107*mm]
+    hdr = [Paragraph(t, _S['cell_hdr']) for t in
+           ['Fiscal Year', 'Auditor Name', 'Auditor Firm Name', 'Address']]
+
+    # auditor name
+    name_cell = [
+        Paragraph(recent.auditor_name, _S['cell']),
+        Paragraph(f'Membership No. {recent.membership_no}', _S['cell_sm']),
+        Paragraph(f'PAN: {recent.pan}', _S['cell_sm']),
+    ]
+    row = [
+        Paragraph(recent.fiscal_year, _S['cell_c']),
+        name_cell,
+        Paragraph(recent.firm_name,   _S['cell']),
+        Paragraph(recent.address,     _S['cell']),
+    ]
+
+    cmds = [
+        ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
+        ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+        ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+        ('TOPPADDING',    (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+        ('VALIGN',        (0, 1), (-1, -1), 'TOP'),
+    ]
+
+    tbl = Table([hdr, row], colWidths=col_w)
+    tbl.setStyle(TableStyle(cmds))
+
+    return [Spacer(1, 4*mm), banner, Spacer(1, 3*mm), tbl]
+
+
+def _make_banner(title: str) -> Table:
+    t = Table([[Paragraph(title, _S['banner'])]], colWidths=[BODY_W])
+    t.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, -1), NAVY),
+        ('TOPPADDING',    (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+    ]))
+    return t
+
+
+
 def _canvas_factory(data: SampleInputModel):
     # return a subclass pre-loaded with report metadata
     class _C(_PageCanvas):
@@ -118,6 +189,6 @@ def generate_pdf(data: SampleInputModel, output_path: Path):
         topMargin=HDR_H + MARGIN,
         bottomMargin=MARGIN,
     )
-    # placeholder body — sections added incrementally
-    story = [Spacer(1, 10)]
+    story = []
+    story += _build_auditors(data.sections.auditors)
     doc.build(story, canvasmaker=_canvas_factory(data))
