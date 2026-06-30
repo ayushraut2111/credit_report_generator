@@ -356,6 +356,75 @@ class CreditPdfMaker:
             ]
         return self._build_financial_table(cf, 'CASH FLOW - STANDALONE')
 
+    @staticmethod
+    def _build_related_party_subtable(subtitle: str, entries: list, col_w: list, hdrs: list):
+        hdr_row = [Paragraph(h, _S['cell_hdr']) for h in hdrs]
+        table_rows = [hdr_row]
+        cmds = [
+            ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
+            ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+            ('TOPPADDING',    (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ]
+        n = len(hdrs)
+        if not entries:
+            table_rows.append([Paragraph('No data available', _S['placeholder'])] + [''] * (n - 1))
+            cmds.append(('SPAN', (0, 1), (-1, 1)))
+        else:
+            for entry in entries:
+                if isinstance(entry, dict):
+                    name     = entry.get('name', '')    or ''
+                    relation = entry.get('relation', '') or ''
+                    details  = entry.get('details', {}) or {}
+                else:
+                    name     = entry.name     or ''
+                    relation = entry.relation or ''
+                    details  = entry.details  or {}
+                details_text = '  '.join(f'{k}: {v}' for k, v in details.items()) if details else ''
+                table_rows.append([
+                    Paragraph(name,         _S['cell']),
+                    Paragraph(relation,     _S['cell']),
+                    Paragraph(details_text, _S['cell']),
+                ])
+
+        sub_hdr = Table([[Paragraph(subtitle, _S['cell_b'])]], colWidths=[BODY_W])
+        sub_hdr.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, -1), SUBTOTAL_BG),
+            ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+            ('TOPPADDING',    (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+
+        tbl = Table(table_rows, colWidths=col_w)
+        tbl.setStyle(TableStyle(cmds))
+        return [Spacer(1, 3*mm), sub_hdr, tbl]
+
+    def _build_related_parties(self):
+        rp = self.data.sections.related_parties
+        if rp is None:
+            return []
+
+        col_w = [80*mm, 80*mm, BODY_W - 160*mm]
+        hdrs  = ['Name', 'Relation', 'Details']
+
+        flowables = [Spacer(1, 4*mm), self._make_banner('RELATED PARTIES')]
+        if rp.period:
+            flowables += [Spacer(1, 2*mm), Paragraph(f'Period: {rp.period}', _S['right'])]
+
+        for subtitle, entries in [
+            ('INDIVIDUALS', rp.individuals or []),
+            ('COMPANIES',   rp.companies   or []),
+            ('OTHERS',      rp.others      or []),
+        ]:
+            flowables += self._build_related_party_subtable(subtitle, entries, col_w, hdrs)
+
+        return flowables
+
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
         doc = SimpleDocTemplate(
@@ -373,6 +442,7 @@ class CreditPdfMaker:
         story += self._build_auditor_comments()
         story += self._build_financial_ratios()
         story += self._build_cash_flow()
+        story += self._build_related_parties()
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
