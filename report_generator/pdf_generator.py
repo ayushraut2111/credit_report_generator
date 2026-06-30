@@ -4,8 +4,8 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from schemas import SampleInputModel
 
 PAGE_SIZE = landscape(A4)
@@ -53,6 +53,12 @@ _S = dict(
                          fontSize=7.5, leading=10, alignment=TA_RIGHT, textColor=MUTED),
     placeholder=ParagraphStyle('placeholder', fontName='Helvetica-Oblique',
                                fontSize=9, leading=13, alignment=TA_CENTER, textColor=MUTED),
+    disc_heading=ParagraphStyle('disc_heading', fontName='Helvetica-Bold',
+                                fontSize=14, leading=20, spaceBefore=8*mm, spaceAfter=4*mm),
+    disc_marked=ParagraphStyle('disc_marked', fontName='Helvetica',
+                               fontSize=10, leading=15, spaceAfter=6*mm),
+    disc_body=ParagraphStyle('disc_body', fontName='Helvetica',
+                             fontSize=9, leading=14, alignment=TA_JUSTIFY),
 )
 
 
@@ -438,7 +444,7 @@ class CreditPdfMaker:
         if ann is None and not older_auditors:
             return []
 
-        flowables = [Spacer(1, 4*mm), self._make_banner('ANNEXURE')]
+        flowables = []
         has_content = False
 
         # older auditor years
@@ -511,6 +517,20 @@ class CreditPdfMaker:
 
         return flowables
 
+    def _build_disclaimer(self) -> list:
+        meta = self.data.report_meta
+        name = meta.marked_to.name
+        org  = meta.marked_to.organization
+        marked_line = (
+            f'Marked To: <b>{name}</b> from <b>{org}</b>'
+        )
+        return [
+            PageBreak(),
+            Paragraph('C. Disclaimer and Confidentiality', _S['disc_heading']),
+            Paragraph(marked_line,                         _S['disc_marked']),
+            Paragraph(meta.disclaimer_text,                _S['disc_body']),
+        ]
+
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
         doc = SimpleDocTemplate(
@@ -522,6 +542,13 @@ class CreditPdfMaker:
             bottomMargin=MARGIN,
         )
         story = []
+
+        # Section A: Financial Information
+        story += [
+            Paragraph('A. Financial Information', _S['disc_heading']),
+            Paragraph('STANDALONE FINANCIALS', _S['section']),
+            Spacer(1, 2*mm),
+        ]
         story += self._build_auditors()
         story += self._build_profit_loss_section()
         story += self._build_balance_sheet()
@@ -529,7 +556,20 @@ class CreditPdfMaker:
         story += self._build_financial_ratios()
         story += self._build_cash_flow()
         story += self._build_related_parties()
-        story += self._build_annexure()
+
+        # Section B: Annexure (only if there is content to show)
+        annexure = self._build_annexure()
+        if annexure:
+            story += [
+                PageBreak(),
+                Paragraph('B. Annexure', _S['disc_heading']),
+                Paragraph('STANDALONE FINANCIAL ANNEXURE', _S['section']),
+            ]
+            story += annexure
+
+        # Section C: Disclaimer — has its own PageBreak
+        story += self._build_disclaimer()
+
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
