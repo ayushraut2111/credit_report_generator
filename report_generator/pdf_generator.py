@@ -193,10 +193,9 @@ class CreditPdfMaker:
         tbl.setStyle(TableStyle(cmds))
         return [Spacer(1, 4*mm), self._make_banner('AUDITORS - STANDALONE'), Spacer(1, 3*mm), tbl]
 
-    def _build_profit_loss_section(self):
-        pl = self.data.sections.profit_and_loss
+    def _build_financial_table(self, section, banner_title: str) -> list:
         currency_unit = self.data.report_meta.currency_unit
-        periods = pl.periods
+        periods = section.periods
         n = len(periods)
         part_w = 75 * mm
         val_w  = (BODY_W - part_w) / n
@@ -218,7 +217,7 @@ class CreditPdfMaker:
             ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
         ]
 
-        for group in pl.groups:
+        for group in section.groups:
             if group.title:
                 ri = len(table_rows)
                 table_rows.append([Paragraph(group.title, _S['cell_b'])] + [''] * n)
@@ -248,12 +247,24 @@ class CreditPdfMaker:
         currency_note = Paragraph(f'(Amount in {currency_unit})', _S['right'])
         return [
             Spacer(1, 4*mm),
-            self._make_banner('PROFIT AND LOSS - STANDALONE'),
+            self._make_banner(banner_title),
             Spacer(1, 2*mm),
             currency_note,
             Spacer(1, 1*mm),
             tbl,
         ]
+
+    def _build_profit_loss_section(self):
+        return self._build_financial_table(
+            self.data.sections.profit_and_loss,
+            'PROFIT AND LOSS - STANDALONE',
+        )
+
+    def _build_balance_sheet(self):
+        return self._build_financial_table(
+            self.data.sections.balance_sheet,
+            'BALANCE SHEET - STANDALONE',
+        )
 
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
@@ -268,6 +279,7 @@ class CreditPdfMaker:
         story = []
         story += self._build_auditors()
         story += self._build_profit_loss_section()
+        story += self._build_balance_sheet()
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
