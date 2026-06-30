@@ -193,13 +193,18 @@ class CreditPdfMaker:
         tbl.setStyle(TableStyle(cmds))
         return [Spacer(1, 4*mm), self._make_banner('AUDITORS - STANDALONE'), Spacer(1, 3*mm), tbl]
 
-    def _build_financial_table(self, section, banner_title: str) -> list:
-        currency_unit = self.data.report_meta.currency_unit
+    def _build_financial_table(self, section, banner_title: str,cell_formatter=None, show_currency_note=True):
         periods = section.periods
         n = len(periods)
         part_w = 75 * mm
         val_w  = (BODY_W - part_w) / n
         col_w  = [part_w] + [val_w] * n
+
+        if cell_formatter is None:
+            def cell_formatter(row, i):
+                val = row.values[i]     if row.values     and i < len(row.values)     else None
+                gro = row.growth_pct[i] if row.growth_pct and i < len(row.growth_pct) else None
+                return self._fmt_value(val, gro)
 
         hdr = [Paragraph('Particulars', _S['cell_hdr'])]
         for p in periods:
@@ -233,9 +238,7 @@ class CreditPdfMaker:
 
                 cells = [Paragraph(row.particular, p_sty)]
                 for i in range(n):
-                    val = row.values[i]     if row.values     and i < len(row.values)     else None
-                    gro = row.growth_pct[i] if row.growth_pct and i < len(row.growth_pct) else None
-                    cells.append(Paragraph(self._fmt_value(val, gro), v_sty))
+                    cells.append(Paragraph(cell_formatter(row, i), v_sty))
 
                 table_rows.append(cells)
                 if row.is_subtotal:
@@ -244,15 +247,12 @@ class CreditPdfMaker:
         tbl = Table(table_rows, colWidths=col_w)
         tbl.setStyle(TableStyle(cmds))
 
-        currency_note = Paragraph(f'(Amount in {currency_unit})', _S['right'])
-        return [
-            Spacer(1, 4*mm),
-            self._make_banner(banner_title),
-            Spacer(1, 2*mm),
-            currency_note,
-            Spacer(1, 1*mm),
-            tbl,
-        ]
+        flowables = [Spacer(1, 4*mm), self._make_banner(banner_title), Spacer(1, 2*mm)]
+        if show_currency_note:
+            currency_unit = self.data.report_meta.currency_unit
+            flowables += [Paragraph(f'(Amount in {currency_unit})', _S['right']), Spacer(1, 1*mm)]
+        flowables.append(tbl)
+        return flowables
 
     def _build_profit_loss_section(self):
         return self._build_financial_table(
@@ -304,6 +304,42 @@ class CreditPdfMaker:
         tbl.setStyle(TableStyle(cmds))
         return [Spacer(1, 4*mm), self._make_banner('AUDITOR COMMENTS'), Spacer(1, 3*mm), tbl]
 
+    @staticmethod
+    def _fmt_ratio_value(val, unit, growth_pct, growth_delta):
+        if val is None:
+            return ''
+        if unit == 'percent':
+            txt = f'{val:.2f}%'
+        elif unit == 'days':
+            txt = f'{int(round(val))} days'
+        else:
+            txt = f'{val:.2f}x'
+
+        if unit == 'days' and growth_delta is not None:
+            d = int(round(growth_delta))
+            color = '#C62828' if d > 0 else '#2E7D32'
+            sign  = '+' if d > 0 else ''
+            return f'{txt} <font color="{color}">{sign}{d} days</font>'
+        if growth_pct is not None:
+            if growth_pct >= 0:
+                return f'{txt} <font color="#2E7D32">↑{growth_pct:.1f}%</font>'
+            return f'{txt} <font color="#C62828">↓{abs(growth_pct):.1f}%</font>'
+        return txt
+
+    def _build_financial_ratios(self):
+        def fmt(row, i):
+            val = row.values[i]       if row.values       and i < len(row.values)       else None
+            gro = row.growth_pct[i]   if row.growth_pct   and i < len(row.growth_pct)   else None
+            dlt = row.growth_delta[i] if row.growth_delta and i < len(row.growth_delta) else None
+            return self._fmt_ratio_value(val, row.unit, gro, dlt)
+
+        return self._build_financial_table(
+            self.data.sections.financial_ratios,
+            'FINANCIAL RATIOS',
+            cell_formatter=fmt,
+            show_currency_note=False,
+        )
+
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
         doc = SimpleDocTemplate(
@@ -319,6 +355,7 @@ class CreditPdfMaker:
         story += self._build_profit_loss_section()
         story += self._build_balance_sheet()
         story += self._build_auditor_comments()
+        story += self._build_financial_ratios()
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
