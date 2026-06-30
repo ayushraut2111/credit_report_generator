@@ -5,7 +5,7 @@
 1. clone the repository
 2. create and activate virtual environment
 3. install requirements from requirements.txt
-4. run command ***python -m report_generator*** (here i have already saved the sample_input json in the code itself so by default it will take that path)
+4. run command *python -m report_generator* (here i have already saved the sample_input json in the code itself so by default it will take that path)
 4. if file is in another path then run command ***python -m report_generator --input {sample input path} --output {sample output path}***
 eg. 
 *python -m report_generator --input /Users/ayushchaurasia/Desktop/credit_manager/credit_report_generator/sample_input.json --output /Users/ayushchaurasia/Desktop/credit_manager/credit_report_generator/sample_output.pdf*
@@ -16,8 +16,11 @@ eg.
 2. *reportlab* - used for generating the pdf (tables, paragraphs, page layout, table of contents, etc.)
 3. *pathlib* - used for handling file paths in a cross platform way
 4. *canvas* - 
+
     a. _PageCanvas extends reportlab canvas to draw header, footer and watermark on every page
+
     b. showPage saves each page state so total page count is known before drawing, save() loops over all states and draws "Page N of M" on each
+
     c. _canvas_factory bakes company name and report metadata into the canvas class and passes it to multiBuild as canvasmaker
 
 **render_report(input_json_path, output_pdf_path) :-**
