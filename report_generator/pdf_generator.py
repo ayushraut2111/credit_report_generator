@@ -266,6 +266,44 @@ class CreditPdfMaker:
             'BALANCE SHEET - STANDALONE',
         )
 
+    def _build_auditor_comments(self) -> list:
+        comments = self.data.sections.auditor_comments
+        col_w = [40*mm, 30*mm, 98.5*mm, 98.5*mm]
+        hdr = [Paragraph(t, _S['cell_hdr']) for t in [
+            'Financial Year', 'Has Adverse Remarks',
+            'Auditor Report Disclosure', 'Director Report Disclosure',
+        ]]
+
+        table_rows = [hdr]
+        for c in comments:
+            remarks_color = '#C62828' if c.has_adverse_remarks.upper() == 'YES' else '#2E7D32'
+            remarks_cell = Paragraph(
+                f'<font color="{remarks_color}"><b>{c.has_adverse_remarks}</b></font>',
+                _S['cell_c'],
+            )
+            table_rows.append([
+                Paragraph(c.financial_year,             _S['cell_c']),
+                remarks_cell,
+                Paragraph(c.auditor_report_disclosure,  _S['cell']),
+                Paragraph(c.director_report_disclosure, _S['cell']),
+            ])
+
+        cmds = [
+            ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
+            ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+            ('TOPPADDING',    (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+            ('VALIGN',        (0, 0), (-1, 0),  'MIDDLE'),
+        ]
+
+        tbl = Table(table_rows, colWidths=col_w)
+        tbl.setStyle(TableStyle(cmds))
+        return [Spacer(1, 4*mm), self._make_banner('AUDITOR COMMENTS'), Spacer(1, 3*mm), tbl]
+
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
         doc = SimpleDocTemplate(
@@ -280,6 +318,7 @@ class CreditPdfMaker:
         story += self._build_auditors()
         story += self._build_profit_loss_section()
         story += self._build_balance_sheet()
+        story += self._build_auditor_comments()
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
