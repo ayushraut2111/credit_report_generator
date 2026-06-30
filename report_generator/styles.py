@@ -1,15 +1,15 @@
 from reportlab.lib.colors import Color, HexColor
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 
 # Page layout
-PAGE_SIZE = landscape(A4)
+PAGE_SIZE = A4
 PAGE_W, PAGE_H = PAGE_SIZE
 MARGIN = 15 * mm
 HDR_H  = 14 * mm   # header band height from top
-BODY_W = 297 * mm - 2 * MARGIN
+BODY_W = 210 * mm - 2 * MARGIN
 
 # Colours
 NAVY        = HexColor('#1E40AF')

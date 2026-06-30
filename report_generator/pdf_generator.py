@@ -1,8 +1,10 @@
 from pathlib import Path
 from reportlab.lib.colors import HexColor
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus.tableofcontents import TableOfContents
 from schemas import SampleInputModel
 from styles import (
     PAGE_SIZE, PAGE_W, PAGE_H, MARGIN, HDR_H, BODY_W,
@@ -87,6 +89,30 @@ class _PageCanvas(canvas.Canvas):
         self.restoreState()
 
 
+class _BannerTable(Table):
+    # for registering all the banners for inner content
+    def __init__(self, data, toc_text='', **kwargs):
+        super().__init__(data, **kwargs)
+        self.toc_text = toc_text
+        self.toc_level = 1
+
+
+class _TocEntry(Paragraph):
+    # it is for header with A,B,C
+    def __init__(self, text, style, level=0):
+        super().__init__(text, style)
+        self.toc_text = text
+        self.toc_level = level
+
+
+class _CreditDocTemplate(SimpleDocTemplate):
+    # wrapped simpledoctemplate class for triggerring auto table of content
+
+    def afterFlowable(self, flowable):
+        if getattr(flowable, 'toc_text', '') and hasattr(flowable, 'toc_level'):
+            self.notify('TOCEntry', (flowable.toc_level,
+                        flowable.toc_text, self.page))
+
 
 class CreditPdfMaker:
 
@@ -94,8 +120,10 @@ class CreditPdfMaker:
         self.data = data
 
     @staticmethod
-    def _make_banner(title: str):
-        t = Table([[Paragraph(title, _S['banner'])]], colWidths=[BODY_W])
+    def _make_banner(title: str, toc: bool = True):
+        data = [[Paragraph(title, _S['banner'])]]
+        t = (_BannerTable(data, toc_text=title, colWidths=[BODY_W])
+             if toc else Table(data, colWidths=[BODY_W]))
         t.setStyle(TableStyle([
             ('BACKGROUND',    (0, 0), (-1, -1), NAVY),
             ('TOPPADDING',    (0, 0), (-1, -1), 6),
@@ -125,7 +153,7 @@ class CreditPdfMaker:
                     Spacer(1, 4*mm)]
         recent = auditors[0]
 
-        col_w = [50*mm, 55*mm, 55*mm, 107*mm]
+        col_w = [28*mm, 38*mm, 40*mm, BODY_W - 106*mm]
         hdr = [Paragraph(t, _S['cell_hdr']) for t in
                ['Fiscal Year', 'Auditor Name', 'Auditor Firm Name', 'Address']]
 
@@ -160,7 +188,7 @@ class CreditPdfMaker:
     def _build_financial_table(self, section, banner_title: str,cell_formatter=None, show_currency_note=True):
         periods = section.periods
         n = len(periods)
-        part_w = 75 * mm
+        part_w = 60 * mm
         val_w  = (BODY_W - part_w) / n
         col_w  = [part_w] + [val_w] * n
 
@@ -232,7 +260,7 @@ class CreditPdfMaker:
 
     def _build_auditor_comments(self):
         comments = self.data.sections.auditor_comments
-        col_w = [40*mm, 30*mm, 98.5*mm, 98.5*mm]
+        col_w = [25*mm, 22*mm, (BODY_W - 47*mm) / 2, (BODY_W - 47*mm) / 2]
         hdr = [Paragraph(t, _S['cell_hdr']) for t in [
             'Financial Year', 'Has Adverse Remarks',
             'Auditor Report Disclosure', 'Director Report Disclosure',
@@ -371,7 +399,7 @@ class CreditPdfMaker:
         if rp is None:
             return []
 
-        col_w = [80*mm, 80*mm, BODY_W - 160*mm]
+        col_w = [55*mm, 55*mm, BODY_W - 110*mm]
         hdrs  = ['Name', 'Relation', 'Details']
 
         flowables = [Spacer(1, 4*mm), self._make_banner('RELATED PARTIES')]
@@ -400,7 +428,7 @@ class CreditPdfMaker:
         # older auditor years
         if older_auditors:
             has_content = True
-            col_w = [50*mm, 55*mm, 55*mm, 107*mm]
+            col_w = [28*mm, 38*mm, 40*mm, BODY_W - 106*mm]
             hdr = [Paragraph(t, _S['cell_hdr']) for t in
                    ['Fiscal Year', 'Auditor Name', 'Auditor Firm Name', 'Address']]
             table_rows = [hdr]
@@ -467,7 +495,7 @@ class CreditPdfMaker:
 
         return flowables
 
-    def _build_disclaimer(self) -> list:
+    def _build_disclaimer(self):
         meta = self.data.report_meta
         name = meta.marked_to.name
         org  = meta.marked_to.organization
@@ -476,14 +504,32 @@ class CreditPdfMaker:
         )
         return [
             PageBreak(),
-            Paragraph('C. Disclaimer and Confidentiality', _S['disc_heading']),
+            _TocEntry('C. Disclaimer and Confidentiality',
+                      _S['disc_heading'], level=0),
             Paragraph(marked_line,                         _S['disc_marked']),
             Paragraph(meta.disclaimer_text,                _S['disc_body']),
         ]
 
+    def _build_toc(self):
+        toc = TableOfContents()
+        toc.dotsMinLevel = 0
+        toc.levelStyles = [
+            ParagraphStyle('TOCLevel0', fontName='Helvetica-Bold', fontSize=10,
+                           leftIndent=0, spaceBefore=5, spaceAfter=2, leading=14),
+            ParagraphStyle('TOCLevel1', fontName='Helvetica', fontSize=9,
+                           leftIndent=10*mm, spaceBefore=2, spaceAfter=1, leading=12,
+                           textColor=MUTED),
+        ]
+        return [
+            self._make_banner('TABLE OF CONTENTS', toc=False),
+            Spacer(1, 4*mm),
+            toc,
+            PageBreak(),
+        ]
+
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
-        doc = SimpleDocTemplate(
+        doc = _CreditDocTemplate(
             str(output_path),
             pagesize=PAGE_SIZE,
             leftMargin=MARGIN,
@@ -493,9 +539,12 @@ class CreditPdfMaker:
         )
         story = []
 
+        # TOC must be first so multiBuild can populate it
+        story += self._build_toc()
+
         # Section A: Financial Information
         story += [
-            Paragraph('A. Financial Information', _S['disc_heading']),
+            _TocEntry('A. Financial Information', _S['disc_heading'], level=0),
             Paragraph('STANDALONE FINANCIALS', _S['section']),
             Spacer(1, 2*mm),
         ]
@@ -512,7 +561,7 @@ class CreditPdfMaker:
         if annexure:
             story += [
                 PageBreak(),
-                Paragraph('B. Annexure', _S['disc_heading']),
+                _TocEntry('B. Annexure', _S['disc_heading'], level=0),
                 Paragraph('STANDALONE FINANCIAL ANNEXURE', _S['section']),
             ]
             story += annexure
@@ -520,7 +569,7 @@ class CreditPdfMaker:
         # Section C: Disclaimer — has its own PageBreak
         story += self._build_disclaimer()
 
-        doc.build(story, canvasmaker=_canvas_factory(self.data))
+        doc.multiBuild(story, canvasmaker=_canvas_factory(self.data))
 
 
 def _canvas_factory(data: SampleInputModel):
