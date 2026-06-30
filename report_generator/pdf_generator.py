@@ -5,8 +5,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer, Table, TableStyle
 from reportlab.platypus.tableofcontents import TableOfContents
-from schemas import SampleInputModel
-from styles import (
+from report_generator.schemas import SampleInputModel
+from report_generator.styles import (
     PAGE_SIZE, PAGE_W, PAGE_H, MARGIN, HDR_H, BODY_W,
     NAVY, L_BLUE, OFF_WHT, MUTED, WM_CLR,
     ALT_BG, BORDER, YELLOW, SUBTOTAL_BG, GREEN, RED,
