@@ -51,6 +51,8 @@ _S = dict(
         'cell_num_b', fontName='Helvetica-Bold', fontSize=8,  leading=11, alignment=TA_RIGHT),
     right=ParagraphStyle('right',     fontName='Helvetica',
                          fontSize=7.5, leading=10, alignment=TA_RIGHT, textColor=MUTED),
+    placeholder=ParagraphStyle('placeholder', fontName='Helvetica-Oblique',
+                               fontSize=9, leading=13, alignment=TA_CENTER, textColor=MUTED),
 )
 
 
@@ -327,6 +329,7 @@ class CreditPdfMaker:
         return txt
 
     def _build_financial_ratios(self):
+        # for financial ratio the formatter is change, in this we have to take care of it by units in the data
         def fmt(row, i):
             val = row.values[i]       if row.values       and i < len(row.values)       else None
             gro = row.growth_pct[i]   if row.growth_pct   and i < len(row.growth_pct)   else None
@@ -339,6 +342,19 @@ class CreditPdfMaker:
             cell_formatter=fmt,
             show_currency_note=False,
         )
+
+    def _build_cash_flow(self):
+        cf = self.data.sections.cash_flow
+        if cf is None or not cf.available:
+            return [
+                Spacer(1, 4*mm),
+                self._make_banner('CASH FLOW - STANDALONE'),
+                Spacer(1, 6*mm),
+                Paragraph('Cash Flow Statement Not Available',
+                          _S['placeholder']),
+                Spacer(1, 4*mm),
+            ]
+        return self._build_financial_table(cf, 'CASH FLOW - STANDALONE')
 
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
@@ -356,6 +372,7 @@ class CreditPdfMaker:
         story += self._build_balance_sheet()
         story += self._build_auditor_comments()
         story += self._build_financial_ratios()
+        story += self._build_cash_flow()
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 
