@@ -161,7 +161,13 @@ class CreditPdfMaker:
         return f'{txt} <font color="#C62828">↓{abs(growth):.1f}%</font>'
 
     def _build_auditors(self):
-        recent = self.data.sections.auditors[0]
+        # show only the most recent auditor; older years go to Annexure via _build_annexure
+        auditors = self.data.sections.auditors
+        if not auditors:
+            return [Spacer(1, 4*mm), self._make_banner('AUDITORS - STANDALONE'),
+                    Spacer(1, 6*mm), Paragraph('No auditor data available', _S['placeholder']),
+                    Spacer(1, 4*mm)]
+        recent = auditors[0]
 
         col_w = [50*mm, 55*mm, 55*mm, 107*mm]
         hdr = [Paragraph(t, _S['cell_hdr']) for t in
@@ -425,6 +431,86 @@ class CreditPdfMaker:
 
         return flowables
 
+    def _build_annexure(self):
+        ann = self.data.sections.annexure
+        older_auditors = self.data.sections.auditors[1:]
+
+        if ann is None and not older_auditors:
+            return []
+
+        flowables = [Spacer(1, 4*mm), self._make_banner('ANNEXURE')]
+        has_content = False
+
+        # older auditor years
+        if older_auditors:
+            has_content = True
+            col_w = [50*mm, 55*mm, 55*mm, 107*mm]
+            hdr = [Paragraph(t, _S['cell_hdr']) for t in
+                   ['Fiscal Year', 'Auditor Name', 'Auditor Firm Name', 'Address']]
+            table_rows = [hdr]
+            for a in older_auditors:
+                name_cell = [
+                    Paragraph(a.auditor_name, _S['cell']),
+                    Paragraph(f'Membership No. {a.membership_no}', _S['cell_sm']),
+                    Paragraph(f'PAN: {a.pan}', _S['cell_sm']),
+                ]
+                table_rows.append([
+                    Paragraph(a.fiscal_year, _S['cell_c']),
+                    name_cell,
+                    Paragraph(a.firm_name,   _S['cell']),
+                    Paragraph(a.address,     _S['cell']),
+                ])
+            cmds = [
+                ('BACKGROUND',    (0, 0), (-1, 0),  YELLOW),
+                ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+                ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+                ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+                ('TOPPADDING',    (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('VALIGN',        (0, 0), (-1, 0),  'MIDDLE'),
+                ('VALIGN',        (0, 1), (-1, -1), 'TOP'),
+            ]
+            tbl = Table(table_rows, colWidths=col_w)
+            tbl.setStyle(TableStyle(cmds))
+            flowables += [Spacer(1, 3*mm), self._make_banner('AUDITORS - ANNEXURE'), Spacer(1, 3*mm), tbl]
+
+        if ann is None:
+            return flowables
+
+        if ann.profit_and_loss:
+            has_content = True
+            flowables += self._build_financial_table(
+                ann.profit_and_loss, 'PROFIT AND LOSS - ANNEXURE',
+            )
+
+        if ann.balance_sheet:
+            has_content = True
+            flowables += self._build_financial_table(
+                ann.balance_sheet, 'BALANCE SHEET - ANNEXURE',
+            )
+
+        if ann.financial_ratios:
+            has_content = True
+            def fmt(row, i):
+                val = row.values[i]       if row.values       and i < len(row.values)       else None
+                gro = row.growth_pct[i]   if row.growth_pct   and i < len(row.growth_pct)   else None
+                dlt = row.growth_delta[i] if row.growth_delta and i < len(row.growth_delta) else None
+                return self._fmt_ratio_value(val, row.unit, gro, dlt)
+            flowables += self._build_financial_table(
+                ann.financial_ratios, 'FINANCIAL RATIOS - ANNEXURE',
+                cell_formatter=fmt, show_currency_note=False,
+            )
+
+        if not has_content:
+            flowables += [
+                Spacer(1, 6*mm),
+                Paragraph('No annexure data available', _S['placeholder']),
+                Spacer(1, 4*mm),
+            ]
+
+        return flowables
+
     def build(self, output_path: Path):
         # this func will build the whole pdf by adding pages with header footer and bookmark to all the data
         doc = SimpleDocTemplate(
@@ -443,6 +529,7 @@ class CreditPdfMaker:
         story += self._build_financial_ratios()
         story += self._build_cash_flow()
         story += self._build_related_parties()
+        story += self._build_annexure()
         doc.build(story, canvasmaker=_canvas_factory(self.data))
 
 

@@ -302,6 +302,37 @@
             ]
           }
         ]
+      },
+      "financial_ratios": {
+        "periods": ["31 March, 2022", "31 March, 2021", "31 March, 2020"],
+        "groups": [
+          {
+            "title": null,
+            "rows": [
+              {"particular": "Net Revenue",   "values": [1.59, 1.08, 3.73], "growth_pct": [47.1, -71.0, -22.9], "is_subtotal": false},
+              {"particular": "Other Income",  "values": [0.01, 0.00, 0.00], "growth_pct": [2507.6, -31.4, -97.2], "is_subtotal": false},
+              {"particular": "Total Revenue", "values": [1.60, 1.08, 3.73], "growth_pct": [48.3, -71.0, -23.4], "is_subtotal": true}
+            ]
+          },
+          {
+            "title": "Operating Expenses",
+            "rows": [
+              {"particular": "Cost of Materials Consumed", "values": [0.00, 0.00, 1.79], "growth_pct": [null, -100.0, -43.0], "is_subtotal": false},
+              {"particular": "Purchase of Stock in Trade", "values": [0.76, 0.25, 0.00], "growth_pct": [196.3, null, null], "is_subtotal": false},
+              {"particular": "Employee Benefits Expense",  "values": [0.45, 0.35, 0.79], "growth_pct": [29.2, -55.6, -7.9], "is_subtotal": false},
+              {"particular": "All Other Expenses",         "values": [0.30, 0.39, 0.76], "growth_pct": [-21.4, -48.9, 13.1], "is_subtotal": false},
+              {"particular": "Total Operating Expenses",   "values": [1.48, 0.99, 3.34], "growth_pct": [49.4, -70.3, -28.5], "is_subtotal": true}
+            ]
+          },
+          {
+            "title": null,
+            "rows": [
+              {"particular": "Operating Profit (EBITDA)", "values": [0.11, 0.09, 0.39], "growth_pct": [21.1, -77.2, 134.9], "is_subtotal": true},
+              {"particular": "Profit Before Tax", "values": [0.07, 0.03, 0.36], "growth_pct": [99.6, -90.3, 103.3], "is_subtotal": true},
+              {"particular": "Profit After Tax",  "values": [0.05, 0.04, 0.35], "growth_pct": [20.2, -87.6, 95.7], "is_subtotal": true}
+            ]
+          }
+        ]
       }
     }
   }
