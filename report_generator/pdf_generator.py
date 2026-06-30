@@ -14,7 +14,7 @@ MARGIN = 15 * mm
 HDR_H  = 14 * mm   # header band height from top
 
 # colour pallete
-NAVY    = HexColor('#1A3A5C')
+NAVY    = HexColor('#1E40AF')
 L_BLUE  = HexColor('#4A9FD4')
 OFF_WHT = HexColor('#D6E4F0')
 MUTED   = HexColor('#888888')
@@ -266,7 +266,7 @@ class CreditPdfMaker:
             'BALANCE SHEET - STANDALONE',
         )
 
-    def _build_auditor_comments(self) -> list:
+    def _build_auditor_comments(self):
         comments = self.data.sections.auditor_comments
         col_w = [40*mm, 30*mm, 98.5*mm, 98.5*mm]
         hdr = [Paragraph(t, _S['cell_hdr']) for t in [
